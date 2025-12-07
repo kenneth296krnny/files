@@ -1,0 +1,998 @@
+-- Full-Fledged Script Hub using UI Library
+-- Mobile Optimized with Virtual Joystick for Fly
+
+local UILibrary = loadstring(game:HttpGet("https://raw.githubusercontent.com/kenneth296krnny/files/refs/heads/main/bbb"))()
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+-- Variables
+local originalWalkSpeed = humanoid.WalkSpeed
+local originalJumpPower = humanoid.JumpPower
+local originalGravity = Workspace.Gravity
+
+-- State variables
+local flyEnabled = false
+local noclipEnabled = false
+local espEnabled = false
+local infJumpEnabled = false
+local fullbrightEnabled = false
+local antiAFKEnabled = false
+local godModeEnabled = false
+local swimEnabled = false
+local noFallEnabled = false
+
+-- Connections
+local flyConnection
+local noclipConnection
+local infJumpConnection
+local antiAFKConnection
+local swimConnection
+local espConnections = {}
+local espObjects = {}
+
+-- Mobile Fly Controls
+local flyGui
+local flyDirection = Vector3.new(0, 0, 0)
+local flySpeed = 1
+
+local function createMobileFlyControls()
+    if flyGui then return end
+    
+    flyGui = Instance.new("ScreenGui")
+    flyGui.Name = "FlyControls"
+    flyGui.ResetOnSpawn = false
+    flyGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    if gethui then
+        flyGui.Parent = gethui()
+    else
+        flyGui.Parent = game:GetService("CoreGui")
+    end
+    
+    -- Joystick Base
+    local joystickBase = Instance.new("Frame")
+    joystickBase.Name = "JoystickBase"
+    joystickBase.Size = UDim2.new(0, 120, 0, 120)
+    joystickBase.Position = UDim2.new(0, 20, 1, -140)
+    joystickBase.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    joystickBase.BorderSizePixel = 2
+    joystickBase.BorderColor3 = Color3.fromRGB(0, 100, 255)
+    joystickBase.BackgroundTransparency = 0.5
+    joystickBase.Parent = flyGui
+    
+    -- Joystick Stick
+    local joystickStick = Instance.new("Frame")
+    joystickStick.Name = "JoystickStick"
+    joystickStick.Size = UDim2.new(0, 50, 0, 50)
+    joystickStick.Position = UDim2.new(0.5, -25, 0.5, -25)
+    joystickStick.BackgroundColor3 = Color3.fromRGB(0, 100, 255)
+    joystickStick.BorderSizePixel = 0
+    joystickStick.Parent = joystickBase
+    
+    -- Up Button
+    local upButton = Instance.new("TextButton")
+    upButton.Name = "UpButton"
+    upButton.Size = UDim2.new(0, 60, 0, 60)
+    upButton.Position = UDim2.new(1, -80, 1, -190)
+    upButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    upButton.BorderSizePixel = 2
+    upButton.BorderColor3 = Color3.fromRGB(0, 100, 255)
+    upButton.Text = "▲"
+    upButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    upButton.TextSize = 24
+    upButton.Font = Enum.Font.SourceSansBold
+    upButton.BackgroundTransparency = 0.5
+    upButton.Parent = flyGui
+    
+    -- Down Button
+    local downButton = Instance.new("TextButton")
+    downButton.Name = "DownButton"
+    downButton.Size = UDim2.new(0, 60, 0, 60)
+    downButton.Position = UDim2.new(1, -80, 1, -120)
+    downButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    downButton.BorderSizePixel = 2
+    downButton.BorderColor3 = Color3.fromRGB(0, 100, 255)
+    downButton.Text = "▼"
+    downButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    downButton.TextSize = 24
+    downButton.Font = Enum.Font.SourceSansBold
+    downButton.BackgroundTransparency = 0.5
+    downButton.Parent = flyGui
+    
+    local dragging = false
+    local touchInput
+    
+    -- Joystick Logic
+    local function updateJoystick(input)
+        local delta = input.Position - joystickBase.AbsolutePosition - joystickBase.AbsoluteSize / 2
+        local distance = math.min(delta.Magnitude, 35)
+        local direction = delta.Unit
+        
+        joystickStick.Position = UDim2.new(0.5, direction.X * distance, 0.5, direction.Y * distance)
+        
+        local camera = Workspace.CurrentCamera
+        local lookVector = camera.CFrame.LookVector
+        local rightVector = camera.CFrame.RightVector
+        
+        flyDirection = (lookVector * -direction.Y + rightVector * direction.X) * (distance / 35)
+        flySpeed = distance / 35
+    end
+    
+    joystickBase.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            touchInput = input
+            updateJoystick(input)
+        end
+    end)
+    
+    joystickBase.InputChanged:Connect(function(input)
+        if input == touchInput and dragging then
+            updateJoystick(input)
+        end
+    end)
+    
+    joystickBase.InputEnded:Connect(function(input)
+        if input == touchInput then
+            dragging = false
+            joystickStick.Position = UDim2.new(0.5, -25, 0.5, -25)
+            flyDirection = Vector3.new(0, 0, 0)
+            flySpeed = 0
+        end
+    end)
+    
+    -- Up/Down Buttons
+    local upPressed = false
+    local downPressed = false
+    
+    upButton.MouseButton1Down:Connect(function()
+        upPressed = true
+    end)
+    
+    upButton.MouseButton1Up:Connect(function()
+        upPressed = false
+    end)
+    
+    downButton.MouseButton1Down:Connect(function()
+        downPressed = true
+    end)
+    
+    downButton.MouseButton1Up:Connect(function()
+        downPressed = false
+    end)
+    
+    -- Update fly direction based on buttons
+    RunService.Heartbeat:Connect(function()
+        if upPressed then
+            flyDirection = flyDirection + Vector3.new(0, 1, 0)
+        end
+        if downPressed then
+            flyDirection = flyDirection - Vector3.new(0, 1, 0)
+        end
+    end)
+end
+
+local function removeMobileFlyControls()
+    if flyGui then
+        flyGui:Destroy()
+        flyGui = nil
+    end
+    flyDirection = Vector3.new(0, 0, 0)
+    flySpeed = 0
+end
+
+-- Create Window
+local window = UILibrary:CreateWindow("UNIVERSAL HUB")
+
+-- ============================================
+-- CHARACTER TAB
+-- ============================================
+local characterTab = window:CreateTab("CHARACTER")
+
+characterTab:CreateLabel("=== MOVEMENT ===")
+
+-- WalkSpeed Slider
+characterTab:CreateSlider("WALKSPEED", 16, 500, originalWalkSpeed, function(value)
+    pcall(function()
+        humanoid.WalkSpeed = value
+    end)
+end)
+
+-- JumpPower Slider
+characterTab:CreateSlider("JUMPPOWER", 50, 500, originalJumpPower, function(value)
+    pcall(function()
+        humanoid.JumpPower = value
+    end)
+end)
+
+-- Gravity Slider
+characterTab:CreateSlider("GRAVITY", 0, 196, originalGravity, function(value)
+    pcall(function()
+        Workspace.Gravity = value
+    end)
+end)
+
+-- Hip Height Slider
+characterTab:CreateSlider("HIP HEIGHT", 0, 50, humanoid.HipHeight, function(value)
+    pcall(function()
+        humanoid.HipHeight = value
+    end)
+end)
+
+characterTab:CreateLabel("")
+characterTab:CreateLabel("=== ABILITIES ===")
+
+-- Fly Toggle
+characterTab:CreateToggle("FLY", false, function(state)
+    flyEnabled = state
+    
+    if flyEnabled then
+        pcall(function()
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.Name = "FlyVelocity"
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+            bodyVelocity.Parent = rootPart
+            
+            local bodyGyro = Instance.new("BodyGyro")
+            bodyGyro.Name = "FlyGyro"
+            bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+            bodyGyro.P = 9e4
+            bodyGyro.Parent = rootPart
+            
+            -- Create mobile controls
+            createMobileFlyControls()
+            
+            flyConnection = RunService.Heartbeat:Connect(function()
+                if not flyEnabled then return end
+                
+                pcall(function()
+                    local moveVector = Vector3.new(0, 0, 0)
+                    local camera = Workspace.CurrentCamera
+                    local speed = humanoid.WalkSpeed / 2
+                    
+                    -- Keyboard controls
+                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                        moveVector = moveVector + (camera.CFrame.LookVector * speed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                        moveVector = moveVector - (camera.CFrame.LookVector * speed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                        moveVector = moveVector - (camera.CFrame.RightVector * speed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                        moveVector = moveVector + (camera.CFrame.RightVector * speed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                        moveVector = moveVector + Vector3.new(0, speed, 0)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                        moveVector = moveVector - Vector3.new(0, speed, 0)
+                    end
+                    
+                    -- Mobile joystick controls
+                    if flyDirection.Magnitude > 0 then
+                        moveVector = moveVector + (flyDirection * speed)
+                    end
+                    
+                    if rootPart:FindFirstChild("FlyVelocity") then
+                        rootPart.FlyVelocity.Velocity = moveVector
+                    end
+                    if rootPart:FindFirstChild("FlyGyro") then
+                        rootPart.FlyGyro.CFrame = camera.CFrame
+                    end
+                end)
+            end)
+            
+            UILibrary:Notify("FLY", "Enabled! Use joystick or WASD", 3)
+        end)
+    else
+        pcall(function()
+            if flyConnection then
+                flyConnection:Disconnect()
+            end
+            
+            if rootPart:FindFirstChild("FlyVelocity") then
+                rootPart.FlyVelocity:Destroy()
+            end
+            if rootPart:FindFirstChild("FlyGyro") then
+                rootPart.FlyGyro:Destroy()
+            end
+            
+            removeMobileFlyControls()
+            
+            UILibrary:Notify("FLY", "Disabled", 2)
+        end)
+    end
+end)
+
+-- Noclip Toggle
+characterTab:CreateToggle("NOCLIP", false, function(state)
+    noclipEnabled = state
+    
+    if noclipEnabled then
+        noclipConnection = RunService.Stepped:Connect(function()
+            pcall(function()
+                for _, part in pairs(character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end)
+        end)
+        UILibrary:Notify("NOCLIP", "Enabled", 2)
+    else
+        if noclipConnection then
+            noclipConnection:Disconnect()
+        end
+        pcall(function()
+            for _, part in pairs(character:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.CanCollide = true
+                end
+            end
+        end)
+        UILibrary:Notify("NOCLIP", "Disabled", 2)
+    end
+end)
+
+-- Infinite Jump Toggle
+characterTab:CreateToggle("INFINITE JUMP", false, function(state)
+    infJumpEnabled = state
+    
+    if infJumpEnabled then
+        infJumpConnection = UserInputService.JumpRequest:Connect(function()
+            pcall(function()
+                if humanoid:GetState() ~= Enum.HumanoidStateType.Jumping then
+                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end)
+        end)
+        UILibrary:Notify("INFINITE JUMP", "Enabled", 2)
+    else
+        if infJumpConnection then
+            infJumpConnection:Disconnect()
+        end
+        UILibrary:Notify("INFINITE JUMP", "Disabled", 2)
+    end
+end)
+
+-- Swim in Air Toggle
+characterTab:CreateToggle("SWIM IN AIR", false, function(state)
+    swimEnabled = state
+    
+    if swimEnabled then
+        pcall(function()
+            swimConnection = RunService.Heartbeat:Connect(function()
+                pcall(function()
+                    if humanoid:GetState() ~= Enum.HumanoidStateType.Swimming then
+                        humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
+                    end
+                end)
+            end)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
+            UILibrary:Notify("SWIM IN AIR", "Enabled", 2)
+        end)
+    else
+        if swimConnection then
+            swimConnection:Disconnect()
+        end
+        pcall(function()
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+        end)
+        UILibrary:Notify("SWIM IN AIR", "Disabled", 2)
+    end
+end)
+
+-- No Fall Damage Toggle
+characterTab:CreateToggle("NO FALL DAMAGE", false, function(state)
+    noFallEnabled = state
+    
+    pcall(function()
+        if noFallEnabled then
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+            UILibrary:Notify("NO FALL DAMAGE", "Enabled", 2)
+        else
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+            UILibrary:Notify("NO FALL DAMAGE", "Disabled", 2)
+        end
+    end)
+end)
+
+characterTab:CreateLabel("")
+characterTab:CreateLabel("=== ACTIONS ===")
+
+-- Reset Character Button
+characterTab:CreateButton("RESET CHARACTER", function()
+    pcall(function()
+        character:BreakJoints()
+        UILibrary:Notify("RESET", "Resetting character...", 2)
+    end)
+end)
+
+-- Respawn Button
+characterTab:CreateButton("RESPAWN", function()
+    pcall(function()
+        local oldPos = rootPart.CFrame
+        character:BreakJoints()
+        player.CharacterAdded:Wait()
+        character = player.Character
+        humanoid = character:WaitForChild("Humanoid")
+        rootPart = character:WaitForChild("HumanoidRootPart")
+        task.wait(0.1)
+        rootPart.CFrame = oldPos
+        UILibrary:Notify("RESPAWN", "Respawned at same position", 2)
+    end)
+end)
+
+-- ============================================
+-- VISUAL TAB
+-- ============================================
+local visualTab = window:CreateTab("VISUAL")
+
+visualTab:CreateLabel("=== ESP ===")
+
+-- ESP Toggle
+visualTab:CreateToggle("ESP (ORANGE OUTLINE)", false, function(state)
+    espEnabled = state
+    
+    if espEnabled then
+        pcall(function()
+            -- Function to add ESP to a character
+            local function addESP(char, plr)
+                pcall(function()
+                    if char and char:FindFirstChild("HumanoidRootPart") then
+                        local highlight = Instance.new("Highlight")
+                        highlight.Name = "ESPHighlight"
+                        highlight.FillColor = Color3.fromRGB(255, 140, 0)
+                        highlight.OutlineColor = Color3.fromRGB(255, 165, 0)
+                        highlight.FillTransparency = 0.5
+                        highlight.OutlineTransparency = 0
+                        highlight.Parent = char
+                        table.insert(espObjects, highlight)
+                    end
+                end)
+            end
+            
+            -- Add ESP to existing players
+            for _, otherPlayer in pairs(Players:GetPlayers()) do
+                if otherPlayer ~= player then
+                    if otherPlayer.Character then
+                        addESP(otherPlayer.Character, otherPlayer)
+                    end
+                    
+                    table.insert(espConnections, otherPlayer.CharacterAdded:Connect(function(char)
+                        if espEnabled then
+                            task.wait(0.5)
+                            addESP(char, otherPlayer)
+                        end
+                    end))
+                end
+            end
+            
+            -- Add ESP to new players
+            table.insert(espConnections, Players.PlayerAdded:Connect(function(otherPlayer)
+                if espEnabled then
+                    otherPlayer.CharacterAdded:Connect(function(char)
+                        if espEnabled then
+                            task.wait(0.5)
+                            addESP(char, otherPlayer)
+                        end
+                    end)
+                end
+            end))
+            
+            UILibrary:Notify("ESP", "Enabled - Orange outlines", 2)
+        end)
+    else
+        pcall(function()
+            -- Remove all ESP
+            for _, highlight in pairs(espObjects) do
+                if highlight and highlight.Parent then
+                    highlight:Destroy()
+                end
+            end
+            espObjects = {}
+            
+            for _, connection in pairs(espConnections) do
+                connection:Disconnect()
+            end
+            espConnections = {}
+            
+            UILibrary:Notify("ESP", "Disabled", 2)
+        end)
+    end
+end)
+
+visualTab:CreateLabel("")
+visualTab:CreateLabel("=== LIGHTING ===")
+
+-- Fullbright Toggle
+visualTab:CreateToggle("FULLBRIGHT", false, function(state)
+    fullbrightEnabled = state
+    
+    pcall(function()
+        if fullbrightEnabled then
+            Lighting.Brightness = 2
+            Lighting.ClockTime = 14
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = false
+            Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+            UILibrary:Notify("FULLBRIGHT", "Enabled", 2)
+        else
+            Lighting.Brightness = 1
+            Lighting.ClockTime = 12
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = true
+            Lighting.OutdoorAmbient = Color3.fromRGB(70, 70, 70)
+            UILibrary:Notify("FULLBRIGHT", "Disabled", 2)
+        end
+    end)
+end)
+
+-- Remove Fog Button
+visualTab:CreateButton("REMOVE FOG", function()
+    pcall(function()
+        Lighting.FogEnd = 100000
+        for _, effect in pairs(Lighting:GetChildren()) do
+            if effect:IsA("Atmosphere") then
+                effect:Destroy()
+            end
+        end
+        UILibrary:Notify("FOG", "Removed all fog effects", 2)
+    end)
+end)
+
+-- FOV Slider
+visualTab:CreateSlider("FIELD OF VIEW", 70, 120, 70, function(value)
+    pcall(function()
+        Workspace.CurrentCamera.FieldOfView = value
+    end)
+end)
+
+visualTab:CreateLabel("")
+visualTab:CreateLabel("=== CAMERA ===")
+
+-- Camera Toggle
+visualTab:CreateToggle("UNLOCK CAMERA ZOOM", false, function(state)
+    pcall(function()
+        if state then
+            player.CameraMaxZoomDistance = 9999
+            player.CameraMinZoomDistance = 0
+            UILibrary:Notify("CAMERA", "Zoom unlocked", 2)
+        else
+            player.CameraMaxZoomDistance = 128
+            player.CameraMinZoomDistance = 0.5
+            UILibrary:Notify("CAMERA", "Zoom reset", 2)
+        end
+    end)
+end)
+
+-- ============================================
+-- TELEPORT TAB
+-- ============================================
+local teleportTab = window:CreateTab("TELEPORT")
+
+teleportTab:CreateLabel("=== QUICK TELEPORTS ===")
+
+-- Teleport to Spawn
+teleportTab:CreateButton("TELEPORT TO SPAWN", function()
+    pcall(function()
+        local spawn = Workspace:FindFirstChild("SpawnLocation")
+        if spawn then
+            rootPart.CFrame = spawn.CFrame + Vector3.new(0, 5, 0)
+            UILibrary:Notify("TELEPORT", "Teleported to spawn", 2)
+        else
+            UILibrary:Notify("TELEPORT", "No spawn found", 2)
+        end
+    end)
+end)
+
+-- Teleport to Random Player
+teleportTab:CreateButton("TELEPORT TO RANDOM PLAYER", function()
+    pcall(function()
+        local playersList = {}
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                table.insert(playersList, plr)
+            end
+        end
+        
+        if #playersList > 0 then
+            local randomPlayer = playersList[math.random(1, #playersList)]
+            rootPart.CFrame = randomPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+            UILibrary:Notify("TELEPORT", "Teleported to " .. randomPlayer.Name, 2)
+        else
+            UILibrary:Notify("TELEPORT", "No players found", 2)
+        end
+    end)
+end)
+
+teleportTab:CreateLabel("")
+teleportTab:CreateLabel("=== PLAYER TELEPORT ===")
+
+-- Create dropdown with players
+local function getPlayerNames()
+    local names = {}
+    pcall(function()
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr ~= player then
+                table.insert(names, plr.Name)
+            end
+        end
+    end)
+    return #names > 0 and names or {"No Players"}
+end
+
+local selectedPlayer = nil
+teleportTab:CreateDropdown("SELECT PLAYER", getPlayerNames(), function(selected)
+    selectedPlayer = selected
+end)
+
+teleportTab:CreateButton("TELEPORT TO SELECTED", function()
+    pcall(function()
+        if selectedPlayer and selectedPlayer ~= "No Players" then
+            local targetPlayer = Players:FindFirstChild(selectedPlayer)
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                rootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+                UILibrary:Notify("TELEPORT", "Teleported to " .. selectedPlayer, 2)
+            else
+                UILibrary:Notify("TELEPORT", "Player not found", 2)
+            end
+        else
+            UILibrary:Notify("TELEPORT", "Select a player first", 2)
+        end
+    end)
+end)
+
+-- ============================================
+-- COMBAT TAB
+-- ============================================
+local combatTab = window:CreateTab("COMBAT")
+
+combatTab:CreateLabel("=== PROTECTION ===")
+
+-- God Mode Toggle (FE)
+combatTab:CreateToggle("GOD MODE (FE)", false, function(state)
+    godModeEnabled = state
+    
+    if godModeEnabled then
+        pcall(function()
+            humanoid.Name = "1"
+            local newHumanoid = humanoid:Clone()
+            newHumanoid.Parent = character
+            newHumanoid.Name = "Humanoid"
+            Workspace.CurrentCamera.CameraSubject = newHumanoid
+            humanoid:Destroy()
+            humanoid = newHumanoid
+            rootPart = character:WaitForChild("HumanoidRootPart")
+            UILibrary:Notify("GOD MODE", "Enabled (FE)", 3)
+        end)
+    else
+        UILibrary:Notify("GOD MODE", "Respawn to disable", 2)
+    end
+end)
+
+-- Remove Forcefield
+combatTab:CreateButton("REMOVE FORCEFIELD", function()
+    pcall(function()
+        for _, ff in pairs(character:GetChildren()) do
+            if ff:IsA("ForceField") then
+                ff:Destroy()
+            end
+        end
+        UILibrary:Notify("FORCEFIELD", "Removed", 2)
+    end)
+end)
+
+combatTab:CreateLabel("")
+combatTab:CreateLabel("=== HEALTH ===")
+
+-- Max Health
+combatTab:CreateButton("MAX HEALTH", function()
+    pcall(function()
+        humanoid.Health = humanoid.MaxHealth
+        UILibrary:Notify("HEALTH", "Set to maximum", 2)
+    end)
+end)
+
+-- Set Max Health
+combatTab:CreateTextBox("SET MAX HEALTH", "Enter max health...", function(text)
+    pcall(function()
+        local value = tonumber(text)
+        if value and value > 0 then
+            humanoid.MaxHealth = value
+            humanoid.Health = value
+            UILibrary:Notify("MAX HEALTH", "Set to " .. value, 2)
+        end
+    end)
+end)
+
+-- ============================================
+-- UTILITY TAB
+-- ============================================
+local utilityTab = window:CreateTab("UTILITY")
+
+utilityTab:CreateLabel("=== ANTI-AFK ===")
+
+-- Anti-AFK Toggle
+utilityTab:CreateToggle("ANTI-AFK", false, function(state)
+    antiAFKEnabled = state
+    
+    if antiAFKEnabled then
+        pcall(function()
+            local vu = game:GetService("VirtualUser")
+            antiAFKConnection = player.Idled:Connect(function()
+                vu:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+                task.wait(1)
+                vu:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+            end)
+            UILibrary:Notify("ANTI-AFK", "Enabled", 2)
+        end)
+    else
+        if antiAFKConnection then
+            antiAFKConnection:Disconnect()
+        end
+        UILibrary:Notify("ANTI-AFK", "Disabled", 2)
+    end
+end)
+
+utilityTab:CreateLabel("")
+utilityTab:CreateLabel("=== TOOLS ===")
+
+-- Delete Tool
+utilityTab:CreateButton("DELETE TOOL IN HAND", function()
+    pcall(function()
+        local tool = character:FindFirstChildOfClass("Tool")
+        if tool then
+            tool:Destroy()
+            UILibrary:Notify("TOOL", "Deleted " .. tool.Name, 2)
+        else
+            UILibrary:Notify("TOOL", "No tool equipped", 2)
+        end
+    end)
+end)
+
+-- Bring All Tools
+utilityTab:CreateButton("BRING ALL TOOLS", function()
+    pcall(function()
+        for _, tool in pairs(player.Backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                tool.Parent = character
+            end
+        end
+        UILibrary:Notify("TOOLS", "Equipped all tools", 2)
+    end)
+end)
+
+utilityTab:CreateLabel("")
+utilityTab:CreateLabel("=== GAME ===")
+
+-- Rejoin Game
+utilityTab:CreateButton("REJOIN GAME", function()
+    pcall(function()
+        game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
+    end)
+end)
+
+-- Server Hop
+utilityTab:CreateButton("SERVER HOP", function()
+    pcall(function()
+        local TeleportService = game:GetService("TeleportService")
+        local Http = game:GetService("HttpService")
+        local url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"
+        
+        local function ListServers()
+            local servers = {}
+            local success, result = pcall(function()
+                return Http:JSONDecode(game:HttpGet(url))
+            end)
+            
+            if success and result and result.data then
+                for _, server in pairs(result.data) do
+                    if server.id ~= game.JobId then
+                        table.insert(servers, server.id)
+                    end
+                end
+            end
+            return servers
+        end
+        
+        local servers = ListServers()
+        if #servers > 0 then
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, servers[math.random(1, #servers)], player)
+        else
+            UILibrary:Notify("SERVER HOP", "No servers found", 2)
+        end
+    end)
+end)
+
+-- Copy Game Link
+utilityTab:CreateButton("COPY GAME LINK", function()
+    pcall(function()
+        local link = "https://www.roblox.com/games/" .. game.PlaceId
+        if setclipboard then
+            setclipboard(link)
+            UILibrary:Notify("COPY", "Game link copied!", 2)
+        else
+            UILibrary:Notify("COPY", "Clipboard not supported", 2)
+        end
+    end)
+end)
+
+-- ============================================
+-- INFO TAB
+-- ============================================
+local infoTab = window:CreateTab("INFO")
+
+infoTab:CreateLabel("=== UNIVERSAL HUB V1.0 ===")
+infoTab:CreateLabel("")
+infoTab:CreateLabel("Mobile optimized with joystick")
+infoTab:CreateLabel("Compatible with most games")
+infoTab:CreateLabel("")
+infoTab:CreateLabel("=== CONTROLS ===")
+infoTab:CreateLabel("Fly: Use virtual joystick")
+infoTab:CreateLabel("Up/Down buttons for altitude")
+infoTab:CreateLabel("Or use WASD on keyboard")
+infoTab:CreateLabel("")
+infoTab:CreateLabel("=== CHAT COMMANDS ===")
+infoTab:CreateLabel("Prefix: ;")
+infoTab:CreateLabel("")
+infoTab:CreateLabel(";fly - Toggle fly")
+infoTab:CreateLabel(";noclip - Toggle noclip")
+infoTab:CreateLabel(";speed [num] - Set walkspeed")
+infoTab:CreateLabel(";jp [num] - Set jumppower")
+infoTab:CreateLabel(";esp - Toggle ESP")
+infoTab:CreateLabel(";fullbright - Toggle fullbright")
+infoTab:CreateLabel(";reset - Reset character")
+infoTab:CreateLabel(";rejoin - Rejoin game")
+infoTab:CreateLabel(";cmds - Show all commands")
+infoTab:CreateLabel("")
+
+pcall(function()
+    local gameName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+    infoTab:CreateLabel("Game: " .. gameName)
+end)
+
+pcall(function()
+    infoTab:CreateLabel("Players: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers)
+end)
+
+-- ============================================
+-- CHAT COMMANDS
+-- ============================================
+local prefix = ";"
+local commands = {
+    fly = function()
+        pcall(function()
+            flyEnabled = not flyEnabled
+            if flyEnabled then
+                -- Trigger fly toggle
+                UILibrary:Notify("FLY", "Use UI to enable fully", 2)
+            end
+        end)
+    end,
+    noclip = function()
+        pcall(function()
+            noclipEnabled = not noclipEnabled
+            UILibrary:Notify("NOCLIP", noclipEnabled and "Enabled" or "Disabled", 2)
+        end)
+    end,
+    speed = function(args)
+        pcall(function()
+            if args[1] then
+                local value = tonumber(args[1])
+                if value then
+                    humanoid.WalkSpeed = value
+                    UILibrary:Notify("SPEED", "Set to " .. value, 2)
+                end
+            end
+        end)
+    end,
+    jp = function(args)
+        pcall(function()
+            if args[1] then
+                local value = tonumber(args[1])
+                if value then
+                    humanoid.JumpPower = value
+                    UILibrary:Notify("JUMPPOWER", "Set to " .. value, 2)
+                end
+            end
+        end)
+    end,
+    esp = function()
+        pcall(function()
+            espEnabled = not espEnabled
+            UILibrary:Notify("ESP", espEnabled and "Enabled" or "Disabled", 2)
+        end)
+    end,
+    fullbright = function()
+        pcall(function()
+            fullbrightEnabled = not fullbrightEnabled
+            Lighting.Brightness = fullbrightEnabled and 2 or 1
+            UILibrary:Notify("FULLBRIGHT", fullbrightEnabled and "Enabled" or "Disabled", 2)
+        end)
+    end,
+    reset = function()
+        pcall(function()
+            character:BreakJoints()
+        end)
+    end,
+    rejoin = function()
+        pcall(function()
+            game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
+        end)
+    end,
+    cmds = function()
+        print("=== COMMANDS ===")
+        print(prefix .. "fly - Toggle fly")
+        print(prefix .. "noclip - Toggle noclip")
+        print(prefix .. "speed [num] - Set walkspeed")
+        print(prefix .. "jp [num] - Set jumppower")
+        print(prefix .. "esp - Toggle ESP")
+        print(prefix .. "fullbright - Toggle fullbright")
+        print(prefix .. "reset - Reset character")
+        print(prefix .. "rejoin - Rejoin game")
+    end
+}
+
+player.Chatted:Connect(function(message)
+    pcall(function()
+        if message:sub(1, #prefix) == prefix then
+            local args = {}
+            for word in message:sub(#prefix + 1):gmatch("%S+") do
+                table.insert(args, word)
+            end
+            local cmd = table.remove(args, 1)
+            if cmd then
+                cmd = cmd:lower()
+                if commands[cmd] then
+                    commands[cmd](args)
+                end
+            end
+        end
+    end)
+end)
+
+-- Character respawn handling
+player.CharacterAdded:Connect(function(char)
+    pcall(function()
+        character = char
+        humanoid = char:WaitForChild("Humanoid")
+        rootPart = char:WaitForChild("HumanoidRootPart")
+        originalWalkSpeed = humanoid.WalkSpeed
+        originalJumpPower = humanoid.JumpPower
+        
+        -- Reset states on respawn
+        flyEnabled = false
+        noclipEnabled = false
+        godModeEnabled = false
+        
+        if flyConnection then
+            flyConnection:Disconnect()
+        end
+        if noclipConnection then
+            noclipConnection:Disconnect()
+        end
+        
+        removeMobileFlyControls()
+    end)
+end)
+
+-- Load notification
+UILibrary:Notify("UNIVERSAL HUB", "Loaded! Mobile optimized", 4)
+print("Universal Hub loaded successfully!")
+print("Chat prefix: " .. prefix)
+print("Type " .. prefix .. "cmds for command list")
