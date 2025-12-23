@@ -1,0 +1,325 @@
+-- Roblox+ Pheonix v1.5
+-- Universal Script (FE)
+-- UI Library: MacLib
+
+local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
+
+-- // Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local Workspace = game:GetService("Workspace")
+
+-- // Local Player
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
+
+-- // Variables & Settings
+local Settings = {
+    ESP = {Enabled = false, Box = false, Tracer = false, Names = false, Distance = false, Color = Color3.fromRGB(255, 255, 255)},
+    Aimbot = {Enabled = false, Aiming = false, FOV = 100, Smoothness = 0.1, TeamCheck = false, Key = Enum.UserInputType.MouseButton2},
+    Hitbox = {Enabled = false, Size = 2, Transparency = 0.5, Part = "Head"},
+    Combat = {TeamCheck = false}
+}
+
+-- // Window Setup
+local Window = MacLib:Window({
+    Title = "Roblox+",
+    Subtitle = "v1.5 Pheonix",
+    Size = UDim2.fromOffset(650, 450),
+    DragStyle = 2,
+    DisabledWindowControls = {},
+    ShowUserInfo = true,
+    Keybind = Enum.KeyCode.RightControl,
+    AcrylicBlur = true
+})
+
+-- // Tab Groups
+local TabGroup = Window:TabGroup()
+local MainTab = TabGroup:Tab({Name = "Main", Image = "rbxassetid://10734950309"})
+local CombatTab = TabGroup:Tab({Name = "Combat", Image = "rbxassetid://10734950473"})
+local AdminTab = TabGroup:Tab({Name = "Admin", Image = "rbxassetid://10734950012"})
+local UtilityTab = TabGroup:Tab({Name = "Server", Image = "rbxassetid://10734949826"})
+local ExtrasTab = TabGroup:Tab({Name = "Extras", Image = "rbxassetid://10734950575"})
+
+--------------------------------------------------------------------------------
+-- MAIN TAB (Movement, Visuals, Teleport, Fun)
+--------------------------------------------------------------------------------
+local MovSec = MainTab:Section({Side = "Left"})
+local VisSec = MainTab:Section({Side = "Right"})
+local TeleSec = MainTab:Section({Side = "Left"})
+local FunSec = MainTab:Section({Side = "Right"})
+
+-- Movement
+MovSec:Header({Text = "Movement"})
+MovSec:Slider({Name = "WalkSpeed", Default = 16, Minimum = 16, Maximum = 500, DisplayMethod = "Value", Callback = function(v) if LocalPlayer.Character then LocalPlayer.Character.Humanoid.WalkSpeed = v end end})
+MovSec:Slider({Name = "JumpPower", Default = 50, Minimum = 50, Maximum = 500, DisplayMethod = "Value", Callback = function(v) if LocalPlayer.Character then LocalPlayer.Character.Humanoid.JumpPower = v end end})
+MovSec:Slider({Name = "Gravity", Default = 196.2, Minimum = 0, Maximum = 500, DisplayMethod = "Value", Callback = function(v) Workspace.Gravity = v end})
+
+-- Visuals
+VisSec:Header({Text = "Visuals (ESP)"})
+VisSec:Toggle({Name = "Enable ESP", Default = false, Callback = function(v) Settings.ESP.Enabled = v end})
+VisSec:Toggle({Name = "Boxes", Default = false, Callback = function(v) Settings.ESP.Box = v end})
+VisSec:Toggle({Name = "Tracers", Default = false, Callback = function(v) Settings.ESP.Tracer = v end})
+VisSec:Toggle({Name = "Names", Default = false, Callback = function(v) Settings.ESP.Names = v end})
+VisSec:Colorpicker({Name = "ESP Color", Default = Color3.fromRGB(255, 255, 255), Callback = function(v) Settings.ESP.Color = v end})
+
+-- Teleport
+TeleSec:Header({Text = "Teleportation"})
+local PlayerList = {}
+local function updatePlayerList()
+    PlayerList = {}
+    for _, p in pairs(Players:GetPlayers()) do if p ~= LocalPlayer then table.insert(PlayerList, p.Name) end end
+end
+updatePlayerList()
+
+local TargetPlayer = ""
+local PlayerDropdown = TeleSec:Dropdown({Name = "Select Player", Multi = false, Options = PlayerList, Callback = function(v) TargetPlayer = v end})
+Players.PlayerAdded:Connect(function() updatePlayerList() PlayerDropdown:SetOptions(PlayerList) end)
+Players.PlayerRemoving:Connect(function() updatePlayerList() PlayerDropdown:SetOptions(PlayerList) end)
+
+TeleSec:Button({Name = "Teleport to Player", Callback = function()
+    local target = Players:FindFirstChild(TargetPlayer)
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
+    end
+end})
+
+-- Fun
+FunSec:Header({Text = "Fun"})
+FunSec:Button({Name = "KILL YOURSELF", Callback = function()
+    pcall(function() game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer("dude im lagging", "All") end)
+    LocalPlayer.Character:BreakJoints()
+end})
+
+--------------------------------------------------------------------------------
+-- COMBAT TAB (Aimbot, Hitbox)
+--------------------------------------------------------------------------------
+local AimSec = CombatTab:Section({Side = "Left"})
+local HitSec = CombatTab:Section({Side = "Right"})
+
+-- Universal Aimbot
+AimSec:Header({Text = "Universal Aimbot"})
+AimSec:Toggle({Name = "Enabled", Default = false, Callback = function(v) Settings.Aimbot.Enabled = v end})
+AimSec:Toggle({Name = "Team Check", Default = false, Callback = function(v) Settings.Aimbot.TeamCheck = v end})
+AimSec:Slider({Name = "FOV Radius", Default = 100, Minimum = 10, Maximum = 800, DisplayMethod = "Value", Callback = function(v) Settings.Aimbot.FOV = v end})
+AimSec:Label({Text = "Hold Right Click to Lock"})
+
+-- FOV Circle Drawing
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 1
+FOVCircle.NumSides = 60
+FOVCircle.Radius = 100
+FOVCircle.Filled = false
+FOVCircle.Visible = false
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+
+-- Aimbot Logic
+local function GetClosestPlayerToMouse()
+    local closest = nil
+    local shortestDistance = Settings.Aimbot.FOV
+
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
+            if Settings.Aimbot.TeamCheck and p.Team == LocalPlayer.Team then continue end
+            
+            local pos = Camera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
+            local magnitude = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+
+            if magnitude < shortestDistance then
+                closest = p
+                shortestDistance = magnitude
+            end
+        end
+    end
+    return closest
+end
+
+RunService.RenderStepped:Connect(function()
+    FOVCircle.Radius = Settings.Aimbot.FOV
+    FOVCircle.Position = Vector2.new(Mouse.X, Mouse.Y + 36) -- Offset for top bar
+    FOVCircle.Visible = Settings.Aimbot.Enabled
+
+    if Settings.Aimbot.Enabled and Settings.Aimbot.Aiming then
+        local target = GetClosestPlayerToMouse()
+        if target then
+            local aimPos = target.Character.Head.Position
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimPos)
+        end
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Settings.Aimbot.Key then Settings.Aimbot.Aiming = true end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Settings.Aimbot.Key then Settings.Aimbot.Aiming = false end
+end)
+
+-- Hitbox Expander
+HitSec:Header({Text = "Hitbox Expander"})
+HitSec:Toggle({Name = "Enabled", Default = false, Callback = function(v) Settings.Hitbox.Enabled = v end})
+HitSec:Slider({Name = "Size", Default = 2, Minimum = 1, Maximum = 20, DisplayMethod = "Value", Callback = function(v) Settings.Hitbox.Size = v end})
+HitSec:Dropdown({Name = "Target Part", Multi = false, Options = {"Head", "HumanoidRootPart"}, Default = "Head", Callback = function(v) Settings.Hitbox.Part = v end})
+
+RunService.RenderStepped:Connect(function()
+    if Settings.Hitbox.Enabled then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild(Settings.Hitbox.Part) then
+                if Settings.Aimbot.TeamCheck and p.Team == LocalPlayer.Team then continue end
+                p.Character[Settings.Hitbox.Part].Size = Vector3.new(Settings.Hitbox.Size, Settings.Hitbox.Size, Settings.Hitbox.Size)
+                p.Character[Settings.Hitbox.Part].Transparency = Settings.Hitbox.Transparency
+                p.Character[Settings.Hitbox.Part].CanCollide = false
+            end
+        end
+    end
+end)
+
+--------------------------------------------------------------------------------
+-- SERVER & UTILITY TAB
+--------------------------------------------------------------------------------
+local UtilSec = UtilityTab:Section({Side = "Left"})
+local PerfSec = UtilityTab:Section({Side = "Right"})
+
+UtilSec:Header({Text = "Connection"})
+UtilSec:Button({Name = "Rejoin Server", Callback = function()
+    TeleportService:Teleport(game.PlaceId, LocalPlayer)
+end})
+
+UtilSec:Button({Name = "Server Hop (Next)", Callback = function()
+    local x = {}
+    for _, v in ipairs(game:GetService("HttpService"):JSONDecode(game:HttpGetAsync("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")).data) do
+        if type(v) == "table" and v.maxPlayers > v.playing and v.id ~= game.JobId then
+            x[#x + 1] = v.id
+        end
+    end
+    if #x > 0 then
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, x[math.random(1, #x)], LocalPlayer)
+    else
+        Window:Notify({Title = "Server Hop", Description = "No other servers found.", Lifetime = 3})
+    end
+end})
+
+UtilSec:Header({Text = "Tools"})
+UtilSec:Button({Name = "Copy Game ID", Callback = function() setclipboard(tostring(game.PlaceId)) end})
+UtilSec:Button({Name = "Chat Spy (Check F9)", Callback = function()
+    Window:Notify({Title = "Chat Spy", Description = "Printing all chats to console (F9).", Lifetime = 3})
+    for _, p in pairs(Players:GetPlayers()) do
+        p.Chatted:Connect(function(msg) print("SPY [" .. p.Name .. "]: " .. msg) end)
+    end
+    Players.PlayerAdded:Connect(function(p)
+        p.Chatted:Connect(function(msg) print("SPY [" .. p.Name .. "]: " .. msg) end)
+    end)
+end})
+
+PerfSec:Header({Text = "Performance"})
+PerfSec:Button({Name = "FPS Booster", Callback = function()
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("BasePart") and not v:IsA("MeshPart") then
+            v.Material = Enum.Material.SmoothPlastic
+            v.Reflectance = 0
+        elseif v:IsA("Decal") or v:IsA("Texture") then
+            v:Destroy()
+        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+            v.Enabled = false
+        end
+    end
+    Lighting.GlobalShadows = false
+    Window:Notify({Title = "FPS Boosted", Description = "Textures removed. Shadows disabled.", Lifetime = 3})
+end})
+PerfSec:Button({Name = "Fix Lighting", Callback = function()
+    Lighting.Brightness = 2
+    Lighting.ClockTime = 14
+    Lighting.FogEnd = 100000
+    Lighting.GlobalShadows = false
+    Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+end})
+
+--------------------------------------------------------------------------------
+-- EXTRAS TAB & ADMIN
+--------------------------------------------------------------------------------
+-- (Previous Extras Logic Maintained for completeness)
+local ExL = ExtrasTab:Section({Side = "Left"})
+local ExR = ExtrasTab:Section({Side = "Right"})
+
+ExL:Button({Name = "Fly (Press F)", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))() end})
+ExL:Toggle({Name = "Noclip", Default = false, Callback = function(v) 
+    RunService.Stepped:Connect(function() 
+        if v and LocalPlayer.Character then 
+            for _, p in pairs(LocalPlayer.Character:GetDescendants()) do 
+                if p:IsA("BasePart") then p.CanCollide = false end 
+            end 
+        end 
+    end)
+end})
+ExL:Button({Name = "Speed Boost", Callback = function() LocalPlayer.Character.Humanoid.WalkSpeed = 100 end})
+ExL:Button({Name = "Jump Boost", Callback = function() LocalPlayer.Character.Humanoid.JumpPower = 200 end})
+ExL:Button({Name = "Anti-AFK", Callback = function() 
+    local virtualUser = game:GetService("VirtualUser")
+    LocalPlayer.Idled:Connect(function() virtualUser:CaptureController(); virtualUser:ClickButton2(Vector2.new()) end)
+end})
+
+ExR:Button({Name = "Invisible (Local)", Callback = function() for _, v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.Transparency = 0.5 end end end})
+ExR:Toggle({Name = "Low Gravity", Default = false, Callback = function(v) Workspace.Gravity = v and 50 or 196.2 end})
+ExR:Button({Name = "Teleport to Cursor", Callback = function() LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Mouse.Hit.p + Vector3.new(0, 3, 0)) end})
+ExR:Button({Name = "Infinite Yield", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end})
+
+--------------------------------------------------------------------------------
+-- ESP SYSTEM (Drawing API) - Optimized
+--------------------------------------------------------------------------------
+local function createESP(plr)
+    local box = Drawing.new("Square"); box.Thickness = 1; box.Filled = false; box.Visible = false
+    local tracer = Drawing.new("Line"); tracer.Thickness = 1; tracer.Visible = false
+    local name = Drawing.new("Text"); name.Size = 16; name.Center = true; name.Outline = true; name.Visible = false
+
+    local function update()
+        local connection
+        connection = RunService.RenderStepped:Connect(function()
+            if Settings.ESP.Enabled and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr ~= LocalPlayer then
+                local root = plr.Character.HumanoidRootPart
+                local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
+                
+                if onScreen then
+                    -- Box
+                    if Settings.ESP.Box then
+                        box.Size = Vector2.new(1500 / pos.Z, 2000 / pos.Z)
+                        box.Position = Vector2.new(pos.X - box.Size.X / 2, pos.Y - box.Size.Y / 2)
+                        box.Color = Settings.ESP.Color
+                        box.Visible = true
+                    else box.Visible = false end
+
+                    -- Tracer
+                    if Settings.ESP.Tracer then
+                        tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                        tracer.To = Vector2.new(pos.X, pos.Y + (box.Size.Y/2))
+                        tracer.Color = Settings.ESP.Color
+                        tracer.Visible = true
+                    else tracer.Visible = false end
+
+                    -- Name
+                    if Settings.ESP.Names then
+                        name.Text = plr.Name
+                        name.Position = Vector2.new(pos.X, pos.Y - (box.Size.Y / 2) - 20)
+                        name.Color = Color3.new(1,1,1)
+                        name.Visible = true
+                    else name.Visible = false end
+                else
+                    box.Visible = false; tracer.Visible = false; name.Visible = false
+                end
+            else
+                box.Visible = false; tracer.Visible = false; name.Visible = false
+                if not plr.Parent then connection:Disconnect(); box:Remove(); tracer:Remove(); name:Remove() end
+            end
+        end)
+    end
+    coroutine.wrap(update)()
+end
+
+for _, p in pairs(Players:GetPlayers()) do createESP(p) end
+Players.PlayerAdded:Connect(createESP)
+
+Window:Notify({Title = "Roblox+ Updated", Description = "Pheonix v1.5 loaded with Combat & Server tools.", Lifetime = 5})
