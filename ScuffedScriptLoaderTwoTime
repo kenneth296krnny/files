@@ -1,0 +1,29 @@
+local PATH = "upp.txt"
+
+local function runFile(path)
+    local src = readfile(path)
+    if not src or src == "" then
+        warn("[upp loader] couldn't read file or it's empty")
+        return
+    end
+
+    local fn, err = loadstring(src, path)
+    if not fn then
+        warn("[upp loader] compile error: " .. tostring(err))
+        return
+    end
+
+    -- optional: sandbox environment
+    -- local env = {}
+    -- setfenv(fn, env)
+
+    local ok, msg = pcall(fn)
+    if not ok then
+        warn("[upp loader] runtime error: " .. tostring(msg))
+        return
+    end
+
+    print("[upp loader] done.")
+end
+
+runFile(PATH)
