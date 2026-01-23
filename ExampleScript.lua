@@ -1,11 +1,39 @@
--- Load the Library
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/kenneth296krnny/files/refs/heads/main/GULPITY.LUA"))()
+-- Safe Load Logic for Spawn/Gulpity Library
+local url = "https://raw.githubusercontent.com/kenneth296krnny/files/refs/heads/main/GULPITY.LUA"
+
+local success, content = pcall(function()
+    return game:HttpGet(url)
+end)
+
+if not success then
+    warn("Failed to fetch library:", content)
+    return
+end
+
+-- Strip UTF-8 BOM if present (Causes "expected identifier, got U+FeFF" error)
+if content:sub(1, 3) == "\239\187\191" then
+    content = content:sub(4)
+end
+
+-- Load the library safely
+local func, err = loadstring(content)
+if not func then
+    warn("Failed to compile library:", err)
+    return
+end
+
+local Library = func()
+
+if not Library then
+    warn("Library execution returned nil.")
+    return
+end
 
 -- Create Window
 local Window = Library:CreateWindow({
     Name = "Gulpity Example",
     Size = UDim2.fromOffset(600, 450),
-    Theme = "Void" -- Uses one of the built-in presets
+    Theme = "Void" 
 })
 
 -- Tab 1: Main Features
@@ -38,7 +66,7 @@ MainSection:Slider({
     Default = 16,
     Decimals = 1,
     Callback = function(val)
-        if game.Players.LocalPlayer.Character then
+        if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
             game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = val
         end
     end
@@ -61,7 +89,6 @@ VisualsSection:Toggle({
     Name = "Enable ESP",
     Default = false,
     Callback = function(v)
-        -- Accessing the internal ESP module if exposed, or just toggle variable
         if Library.Visuals then Library.Visuals.Enabled = v end
     end
 })
