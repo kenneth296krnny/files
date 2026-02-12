@@ -1,0 +1,27 @@
+-- The user loads the UI (which secretly loads ORE)
+local Library = loadstring(game:HttpGet(".../DynahaxUI.lua"))()
+
+local Window = Library.new("My Script Hub")
+
+-- User creates a toggle
+Window:AddToggle({
+    Text = "Silent Aim",
+    ID = "SilentAim_Main", -- This ID is used by ORE to save/load
+    Default = false,
+    Callback = function(state)
+        print("Silent Aim is now:", state)
+        -- Aim logic here
+    end
+})
+
+Window:AddToggle({
+    Text = "ESP",
+    ID = "ESP_Master",
+    Default = true,
+    Callback = function(state)
+        print("ESP is now:", state)
+    end
+})
+
+-- Finally, apply saved settings
+Window:LoadConfig()
