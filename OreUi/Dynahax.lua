@@ -3,7 +3,7 @@ local DynahaxUI = {}
 
 -- 1. SILENTLY LOAD THE KERNEL
 -- The user never sees this line. It happens in the background.
-local ORE = loadstring(game:HttpGet("https://raw.githubusercontent.com/.../OREkernel.lua"))().new()
+local ORE = loadstring(game:HttpGet("https://raw.githubusercontent.com/kenneth296krnny/files/refs/heads/main/OreUi/kernel.lua"))().new()
 
 -- 2. CREATE THE WINDOW (Visuals)
 function DynahaxUI.new(title)
